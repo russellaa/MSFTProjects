@@ -136,20 +136,23 @@ function deploy-adflinkedservice($sub, $rg, $adf, $linkedservice, $inputfile) {
     $linkedservice = $linkedservice.Replace(" ", "_")
     Write-OutLog "Starting restore of linked service $linkedservice in factory $adf in resource group $rg"
     $uri = "https://management.azure.com/subscriptions/$sub/resourcegroups/$rg/providers/Microsoft.DataFactory/factories/$adf/linkedservices/$($linkedservice)?api-version=2018-06-01"
-
     $token = (Invoke-AzCmd "az account get-access-token").accessToken
-
     $template = (get-content -Path $inputfile | convertfrom-json)
-
     $template.name = $linkedservice
-
     $body = $template | convertto-json -depth 15
-
     $headers = @{}
     $headers["Authorization"] = "Bearer $token"
+    Write-OutLog "Callling REST method body is $body"
     Write-OutLog "Callling REST method: $uri"
     #Using REST call direct, as AZ CLI has some validation which the pipeline JSON doesn't pass for some reason.
-    Invoke-RestMethod -Method Put -Uri $uri -body $body -Headers $headers 
+    try {
+        Invoke-RestMethod -Method Put -Uri $uri -body $body -Headers $headers -Verbose -Debug
+    }
+    catch {
+        $message = $_.Exception
+        Write-OutLog $message -ForegroundColor Red
+        throw "$message"
+    }
 }
 function backup-adfintegrationruntime($sub, $rg, $adf, $integrationruntime, $outputfile) {
     Write-OutLog "Starting backup of linked service $linkedservice in factory $adf in resource group $rg"
@@ -170,7 +173,7 @@ function deploy-adfintegrationruntime($sub, $rg, $adf, $integrationruntime, $inp
     $uri = "https://management.azure.com/subscriptions/$sub/resourcegroups/$rg/providers/Microsoft.DataFactory/factories/$adf/integrationruntimes/$($integrationruntime)?api-version=2018-06-01"
     $token = (Invoke-AzCmd "az account get-access-token").accessToken
     $template = (get-content -Path $inputfile)
-    $body = $template | convertto-json -depth 
+    $body = $template | convertto-json -depth 4
     $headers = @{}
     $headers["Authorization"] = "Bearer $token"
     $headers["content-type"] = "application/json"
@@ -794,7 +797,7 @@ function Set-ADFManagedIdentity {
     Write-OutLog "Assignee ID for old ADF is $oldaid"
     #az role assignment list --assignee # uses graph API
     # does not work returnns [] # only works if --all is added
-    $roles = az role assignment list --assignee $oldaid --all | ConvertFrom-Json -Depth 15
+    $roles = az role assignment list --assignee $oldaid --all | ConvertFrom-Json -Depth 4
     Write-OutLog "Role Information: "
     Write-OutLog $roles
     $aid = az ad sp list --display-name $newFactoryName --query [].id --output tsv
