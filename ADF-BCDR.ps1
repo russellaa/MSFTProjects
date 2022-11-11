@@ -143,7 +143,7 @@ function deploy-adflinkedservice($sub, $rg, $adf, $linkedservice, $inputfile) {
 
     $template.name = $linkedservice
 
-    $body = $template | convertto-json -depth 10
+    $body = $template | convertto-json -depth 15
 
     $headers = @{}
     $headers["Authorization"] = "Bearer $token"
@@ -170,7 +170,7 @@ function deploy-adfintegrationruntime($sub, $rg, $adf, $integrationruntime, $inp
     $uri = "https://management.azure.com/subscriptions/$sub/resourcegroups/$rg/providers/Microsoft.DataFactory/factories/$adf/integrationruntimes/$($integrationruntime)?api-version=2018-06-01"
     $token = (Invoke-AzCmd "az account get-access-token").accessToken
     $template = (get-content -Path $inputfile)
-    $body = $template | convertto-json -depth 4
+    $body = $template | convertto-json -depth 
     $headers = @{}
     $headers["Authorization"] = "Bearer $token"
     $headers["content-type"] = "application/json"
@@ -212,7 +212,7 @@ function deploy-adfdataflow($sub, $rg, $adf, $dataflow, $inputfile, $folder = $n
 
     }
     #>
-    $body = $template | convertto-json -Depth 4
+    $body = $template | convertto-json -Depth 15
 
     $headers = @{}
     $headers["Authorization"] = "Bearer $token"
@@ -251,7 +251,7 @@ function deploy-adfdataset($sub, $rg, $adf, $dataset, $inputfile, $folder = $nul
         else {
             $template.properties | add-member -Name "folder" -Value ("{ `"name`": `"$folder`" }" | convertfrom-json) -MemberType NoteProperty
         }
-        $body = $template | convertto-json -Depth 4
+        $body = $template | convertto-json -Depth 15
     }
     else {
         $body = get-content -Path $inputfile
@@ -294,7 +294,7 @@ function Deploy-AdfPipeline {
     Write-OutLog "Starting restore of pipeline $pipeline in factory $adf in resource group $rg, file: $inputfile"
     $uri = "https://management.azure.com/subscriptions/$sub/resourcegroups/$rg/providers/Microsoft.DataFactory/factories/$adf/pipelines/$($pipeline)?api-version=2018-06-01"
     $token = (Invoke-AzCmd "az account get-access-token").accessToken
-    $template = (get-content -Path $inputfile | convertfrom-json -depth 10)
+    $template = (get-content -Path $inputfile | convertfrom-json -depth 15)
     $body = get-content -Path $inputfile
     $headers = @{}
     $headers["Authorization"] = "Bearer $token"
@@ -374,7 +374,7 @@ function Deploy-AdfTrigger {
             $template.properties | add-member -Name "folder" -Value ("{ `"name`": `"$folder`" }" | convertfrom-json) -MemberType NoteProperty
         }
     }
-    $body = $template | convertto-json -Depth 4
+    $body = $template | convertto-json -Depth 15
     $headers = @{}
     $headers["Authorization"] = "Bearer $token"
 
@@ -629,7 +629,7 @@ function restore-factories {
         #deploy integration runtimes
         foreach ($runtime in $factory.GetDirectories("integrationruntimes").GetFiles("*.json", [System.IO.SearchOption]::AllDirectories)) {
             # Old/Existing ADF
-            $scope = (Get-Content $runtime.FullName | ConvertFrom-Json -Depth 4).properties.typeproperties.linkedInfo.resourceId
+            $scope = (Get-Content $runtime.FullName | ConvertFrom-Json -Depth 15).properties.typeproperties.linkedInfo.resourceId
             Write-OutLog "Scope is $scope"
             Write-OutLog "Factory Pricipal ID is $factoryPrincipalId"
             Write-OutLog "Setting Role for Integrated Runtime"
@@ -794,14 +794,19 @@ function Set-ADFManagedIdentity {
     Write-OutLog "Assignee ID for old ADF is $oldaid"
     #az role assignment list --assignee # uses graph API
     # does not work returnns [] # only works if --all is added
-    $roles = az role assignment list --assignee $oldaid --all | ConvertFrom-Json -Depth 4
+    $roles = az role assignment list --assignee $oldaid --all | ConvertFrom-Json -Depth 15
     Write-OutLog "Role Information: "
     Write-OutLog $roles
     $aid = az ad sp list --display-name $newFactoryName --query [].id --output tsv
     Write-OutLog "Assignee ID for new ADF is $aid"
     # Assign Role
     foreach ($role in $roles) {
-        Invoke-AzCmd -cmd "az role assignment create --assignee ""$aid"" --role ""$($role.roleDefinitionName)"" --scope ""$($role.scope)"" "
+        try{
+            Invoke-AzCmd -cmd "az role assignment create --assignee ""$aid"" --role ""$($role.roleDefinitionName)"" --scope ""$($role.scope)"" "
+        }
+        catch{
+            Write-OutLog "Unable to set role assignment!"
+        }
     }
 
 }
