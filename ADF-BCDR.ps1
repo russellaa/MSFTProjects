@@ -139,7 +139,7 @@ function deploy-adflinkedservice($sub, $rg, $adf, $linkedservice, $inputfile) {
     $token = (Invoke-AzCmd "az account get-access-token").accessToken
     $template = (get-content -Path $inputfile | convertfrom-json)
     $template.name = $linkedservice
-    $body = $template | convertto-json -depth 15
+    $body = $template | convertto-json -depth 10
     $headers = @{}
     $headers["Authorization"] = "Bearer $token"
     Write-OutLog "Callling REST method body is $body"
@@ -169,15 +169,16 @@ function backup-adfintegrationruntime($sub, $rg, $adf, $integrationruntime, $out
 }
 
 function deploy-adfintegrationruntime($sub, $rg, $adf, $integrationruntime, $inputfile) {
-    Write-OutLog "Starting restore of linked service $linkedservice in factory $adf in resource group $rg"
+    Write-OutLog "Starting restore of integration runtime $integrationruntime in factory $adf in resource group $rg"
+    Write-OutLog "Inputfile is $inputfile"
     $uri = "https://management.azure.com/subscriptions/$sub/resourcegroups/$rg/providers/Microsoft.DataFactory/factories/$adf/integrationruntimes/$($integrationruntime)?api-version=2018-06-01"
     $token = (Invoke-AzCmd "az account get-access-token").accessToken
-    $template = (get-content -Path $inputfile)
-    $body = $template | convertto-json -depth 4
+    $template = get-content -Path $inputfile
+    $body = $template | convertto-json -depth 10
     $headers = @{}
     $headers["Authorization"] = "Bearer $token"
     $headers["content-type"] = "application/json"
-    Write-OutLog "Callling REST method body is $body"
+    #Write-OutLog "Callling REST method body is $body"
     Write-OutLog "Callling REST method: $uri"
     #Using REST call direct, as AZ CLI has some validation which the pipeline JSON doesn't pass for some reason.
     try {
@@ -223,7 +224,7 @@ function deploy-adfdataflow($sub, $rg, $adf, $dataflow, $inputfile, $folder = $n
 
     }
     #>
-    $body = $template | convertto-json -Depth 15
+    $body = $template | convertto-json -Depth 10
 
     $headers = @{}
     $headers["Authorization"] = "Bearer $token"
