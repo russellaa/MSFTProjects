@@ -133,13 +133,10 @@ function backup-adflinkedservice($sub, $rg, $adf, $linkedservice, $outputfile) {
 }
 
 function deploy-adflinkedservice($sub, $rg, $adf, $linkedservice, $inputfile) {
-    $linkedservice = $linkedservice.Replace(" ", "_")
     Write-OutLog "Starting restore of linked service $linkedservice in factory $adf in resource group $rg"
     $uri = "https://management.azure.com/subscriptions/$sub/resourcegroups/$rg/providers/Microsoft.DataFactory/factories/$adf/linkedservices/$($linkedservice)?api-version=2018-06-01"
     $token = (Invoke-AzCmd "az account get-access-token").accessToken
-    $template = (get-content -Path $inputfile | convertfrom-json)
-    $template.name = $linkedservice
-    $body = $template | convertto-json -depth 10
+    $body = get-content -Path $inputfile
     $headers = @{}
     $headers["Authorization"] = "Bearer $token"
     Write-OutLog "Callling REST method body is $body"
@@ -173,8 +170,7 @@ function deploy-adfintegrationruntime($sub, $rg, $adf, $integrationruntime, $inp
     Write-OutLog "Inputfile is $inputfile"
     $uri = "https://management.azure.com/subscriptions/$sub/resourcegroups/$rg/providers/Microsoft.DataFactory/factories/$adf/integrationruntimes/$($integrationruntime)?api-version=2018-06-01"
     $token = (Invoke-AzCmd "az account get-access-token").accessToken
-    $template = get-content -Path $inputfile
-    $body = $template | convertto-json -depth 10
+    $body = get-content -Path $inputfile
     $headers = @{}
     $headers["Authorization"] = "Bearer $token"
     $headers["content-type"] = "application/json"
@@ -205,30 +201,12 @@ function backup-adfdataflow($sub, $rg, $adf, $dataflow, $outputfile) {
 }
 
 function deploy-adfdataflow($sub, $rg, $adf, $dataflow, $inputfile, $folder = $null) {
-    $dataflow = $dataflow.Replace(" ", "_")
     Write-OutLog "Starting restore of data flow $dataflow in factory $adf in resource group $rg"
     $uri = "https://management.azure.com/subscriptions/$sub/resourcegroups/$rg/providers/Microsoft.DataFactory/factories/$adf/dataFlows/$($dataflow)?api-version=2018-06-01"
-
     $token = (Invoke-AzCmd "az account get-access-token").accessToken
-
-    $template = (get-content -Path $inputfile | convertfrom-json)
-    $template.name = $dataflow
-    <#
-    if (($null -eq $folder) -or ($folder -eq "")) {
-        if ($template.properties.folder -ne $null) {
-            $template.properties.folder.name = $folder
-        }
-        else {
-            $template.properties | add-member -Name "folder" -Value ("{ `"name`": `"$folder`" }" | convertfrom-json) -MemberType NoteProperty
-        }
-
-    }
-    #>
-    $body = $template | convertto-json -Depth 10
-
+    $body = get-content -Path $inputfile
     $headers = @{}
     $headers["Authorization"] = "Bearer $token"
-
     Write-OutLog "Callling REST method: $uri"
     #Using REST call direct, as AZ CLI has some validation which the pipeline JSON doesn't pass for some reason.
     Invoke-RestMethod -Method Put -Uri $uri -body $body -Headers $headers 
@@ -251,28 +229,10 @@ function backup-adfdataset($sub, $rg, $adf, $dataset, $outputfile) {
 function deploy-adfdataset($sub, $rg, $adf, $dataset, $inputfile, $folder = $null) {
     Write-OutLog "Starting deploy of data set $dataset in factory $adf in resource group $rg"
     $uri = "https://management.azure.com/subscriptions/$sub/resourcegroups/$rg/providers/Microsoft.DataFactory/factories/$adf/datasets/$($dataset)?api-version=2018-06-01"
-
     $token = (Invoke-AzCmd "az account get-access-token").accessToken
-
-    $template = get-content -Path $inputfile | convertfrom-json
-    <#
-    if (($null -eq $folder) -or ($folder -eq "")) {
-        if ($template.properties.folder -ne $null) {
-            $template.properties.folder.name = $folder
-        }
-        else {
-            $template.properties | add-member -Name "folder" -Value ("{ `"name`": `"$folder`" }" | convertfrom-json) -MemberType NoteProperty
-        }
-        $body = $template | convertto-json -Depth 15
-    }
-    else {
-        $body = get-content -Path $inputfile
-    }
-    #>
     $body = get-content -Path $inputfile
     $headers = @{}
     $headers["Authorization"] = "Bearer $token"
-
     Write-OutLog "Callling REST method: $uri"
     #Using REST call direct, as AZ CLI has some validation which the pipeline JSON doesn't pass for some reason.
     Invoke-RestMethod -Method Put -Uri $uri -body $body -Headers $headers 
@@ -373,23 +333,11 @@ function Deploy-AdfTrigger {
         $folder = $null
     )
     Write-OutLog "Starting restore of trigger $trigger in factory $adf in resource group $rg"
-    $pipeline = $pipeline.Replace(" ", "_")
     $uri = "https://management.azure.com/subscriptions/$sub/resourcegroups/$rg/providers/Microsoft.DataFactory/factories/$adf/triggers/$($trigger)?api-version=2018-06-01"
     $token = (Invoke-AzCmd "az account get-access-token").accessToken
-    $template = (get-content -Path $inputfile | convertfrom-json)
-    $template.name = $pipeline
-    if ($null -ne $folder) {
-        if ($null -ne $template.properties.folder ) {
-            $template.properties.folder.name = $folder
-        }
-        else {
-            $template.properties | add-member -Name "folder" -Value ("{ `"name`": `"$folder`" }" | convertfrom-json) -MemberType NoteProperty
-        }
-    }
-    $body = $template | convertto-json -Depth 15
+    $body = get-content -Path $inputfile
     $headers = @{}
     $headers["Authorization"] = "Bearer $token"
-
     Write-OutLog "Callling REST method: $uri"
     #Using REST call direct, as AZ CLI has some validation which the pipeline JSON doesn't pass for some reason.
     try {
