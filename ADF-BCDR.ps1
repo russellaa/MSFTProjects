@@ -177,9 +177,17 @@ function deploy-adfintegrationruntime($sub, $rg, $adf, $integrationruntime, $inp
     $headers = @{}
     $headers["Authorization"] = "Bearer $token"
     $headers["content-type"] = "application/json"
+    Write-OutLog "Callling REST method body is $body"
     Write-OutLog "Callling REST method: $uri"
     #Using REST call direct, as AZ CLI has some validation which the pipeline JSON doesn't pass for some reason.
-    Invoke-RestMethod -Method Put -Uri $uri -body $body -Headers $headers 
+    try {
+        Invoke-RestMethod -Method Put -Uri $uri -body $body -Headers $headers -Verbose -Debug
+    }
+    catch {
+        $message = $_.Exception
+        Write-OutLog $message -ForegroundColor Red
+        throw "$message"
+    }
 }
 function backup-adfdataflow($sub, $rg, $adf, $dataflow, $outputfile) {
     Write-OutLog "Starting backup of data flow $dataflow in factory $adf in resource group $rg"
