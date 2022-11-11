@@ -61,6 +61,23 @@ function Invoke-AzCmd {
     }
 }
 
+function Get-PipelinesHash {
+    [CmdletBinding()]
+    param (
+        $template,
+        $isrecurse = $false
+    )
+    $pipelinelist = @()
+    foreach ($item in $template.Values) {
+        if ($item["pipeline"] -ne "") {
+            $item.referenceName
+        }
+        #$item.PSObject.Properties
+        $pipelinelist += $item.referenceName
+    }
+    return ($pipelinelist | Get-Unique)
+}
+
 function backup-adffactory($sub, $rg, $adf, $outputfile) {
     Write-OutLog "Starting backup of factory $adf in resource group $rg"
     # Get the pipeline via AZ CLI - gives us the cleanest JSON
@@ -272,26 +289,47 @@ function Deploy-AdfPipeline {
         $adf, 
         $pipeline, 
         $inputfile, 
-        $folder = $null
+        [ref] $donelist
     )
-    Write-OutLog "Starting restore of pipeline $pipeline in factory $adf in resource group $rg"
-    $pipeline = $pipeline.Replace(" ", "_") # GAP is using underscores in their pipeline names
+    Write-OutLog "Starting restore of pipeline $pipeline in factory $adf in resource group $rg, file: $inputfile"
     $uri = "https://management.azure.com/subscriptions/$sub/resourcegroups/$rg/providers/Microsoft.DataFactory/factories/$adf/pipelines/$($pipeline)?api-version=2018-06-01"
     $token = (Invoke-AzCmd "az account get-access-token").accessToken
-    $template = (get-content -Path $inputfile | convertfrom-json)
-    $body = $template
+    $template = (get-content -Path $inputfile | convertfrom-json -depth 10)
+    $body = get-content -Path $inputfile
     $headers = @{}
     $headers["Authorization"] = "Bearer $token"
 
-    Write-OutLog "Callling REST method: $uri"
-    #Using REST call direct, as AZ CLI has some validation which the pipeline JSON doesn't pass for some reason.
-    try {
-        Invoke-RestMethod -Method Put -Uri $uri -body $body -Headers $headers -Verbose
+    $fileobj = get-item $inputfile
+       
+    foreach ($reference in get-pipelinereferences -pipeline $template) {
+        if ($donelist -notcontains $reference) {
+            $splat = @{
+                sub       = $sub
+                rg        = $rg  
+                adf       = $adf
+                pipeline  = $reference
+                inputfile = "$($fileobj.Directory.FullName)\$reference.json"
+                donelist  = $donelist
+            }
+            $donelist
+            deploy-adfpipeline @splat
+            $donelist
+        }
     }
-    catch {
-        $message = $_.Exception
-        Write-OutLog $message -ForegroundColor Red
-        throw "$message"
+    if ($donelist -notcontains $pipeline) {
+        Write-OutLog "Callling REST method: $uri"
+        #Using REST call direct, as AZ CLI has some validation which the pipeline JSON doesn't pass for some reason.
+        try {
+            Invoke-RestMethod -Method Put -Uri $uri -body $body -Headers $headers -Verbose
+            Write-Host "Dumping Type Info" -ForegroundColor Yellow
+
+            $donelist.Value += $pipeline           
+        }
+        catch {
+            $message = $_.Exception
+            Write-OutLog $message -ForegroundColor Red
+            throw "$message"
+        }
     }
 }
 
@@ -618,6 +656,7 @@ function restore-factories {
         }
 
         #deploy pipelines
+        <#
         $splat = @{
             SouceDirectory = $srcfolder
             Subscription   = $subscription
@@ -625,8 +664,24 @@ function restore-factories {
             ADF            = "$($factory.name)$suffix"
         }
         Deploy-AdfPipelineDependancy @splat
+        #>
+        Write-OutLog "Deploying backed up Pipelines..."
+        foreach ($pipeline in $factory.GetDirectories("pipelines").GetFiles("*.json", [System.IO.SearchOption]::AllDirectories)) {
+            Write-OutLog "found pipeline $pipeline"
+            $donelist = @()
+            $splat = @{
+                sub       = $subscription 
+                rg        = $resourceGroup 
+                adf       = "$($factory.name)$suffix"
+                pipeline  = $pipeline.BaseName 
+                inputfile = $pipeline.FullName 
+                donelist  = ([ref]$donelist)
+            }
+            deploy-adfpipeline @splat
+        }
 
         # deploy triggers last
+        Write-OutLog "Deploying backed up triggers..."
         foreach ($trigger in $factory.GetDirectories("triggers").GetFiles("*.json", [System.IO.SearchOption]::AllDirectories)) {
             Deploy-AdfTrigger -sub $subscription -rg $resourceGroup -adf "$($factory.name)$suffix" -trigger $trigger.BaseName -inputfile $trigger.FullName
         }
